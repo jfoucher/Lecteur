@@ -1,31 +1,15 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow
- */
-
 import React, {Component} from 'react';
 import {Platform, StyleSheet, Text, View, Button, Image, ScrollView, ImageEditor, ImageStore, PixelRatio, TouchableHighlight} from 'react-native';
 
 import { RNCamera } from 'react-native-camera';
 import Tts from 'react-native-tts';
 import RNTextDetector from 'react-native-text-detector';
-import { white } from 'ansi-colors';
-import DragButton from './components/DragButton.js'
+import Cropper from './components/Cropper.js'
+import CroppedImage from './components/CroppedImage.js'
 import StatusBarBackground from './components/StatusBarBackground.js'
+import MainButton from './components/MainButton.js';
 
-const instructions = Platform.select({
-  ios: 'Press Cmd+R to reload,\n' + 'Cmd+D or shake for dev menu',
-  android:
-    'Double tap R on your keyboard to reload,\n' +
-    'Shake or press menu button for dev menu',
-});
-
-type Props = {};
-export default class App extends Component<Props> {
-
+export default class App extends Component {
   constructor() {
     super()
     this.state = {
@@ -34,10 +18,10 @@ export default class App extends Component<Props> {
       buttonText: 'Photo',
       picture: null,
       processing: false,
-      topCrop: 10,
-      leftCrop: 10,
-      bottomCrop: 10,
-      rightCrop: 10,
+      topCrop: 40,
+      leftCrop: 40,
+      bottomCrop: 40,
+      rightCrop: 40,
       x: 0, 
       y: 0, 
       width: 0, 
@@ -49,97 +33,106 @@ export default class App extends Component<Props> {
     this.done = this.done.bind(this)
     this.moved2 = this.moved2.bind(this)
     this.done2 = this.done2.bind(this)
+    this.layoutChanged = this.layoutChanged.bind(this)
+    this.takePicture = this.takePicture.bind(this)
+  }
+
+  layoutChanged(event) {
+    const {x, y, width, height} = event.nativeEvent.layout;
+    this.setState({x, y, width, height});
   }
 
   moved(gestureState) {
+    if (this.state.rightCrop + gestureState.moveX > this.state.width - 50 || this.state.bottomCrop + gestureState.moveY > this.state.height) {
+      return
+    }
     this.setState({leftCrop: gestureState.moveX, topCrop: gestureState.moveY - 20, scrollEnabled: false})
   }
 
   done(gestureState) {
+    if (this.state.rightCrop + gestureState.moveX > this.state.width - 50 || this.state.bottomCrop + gestureState.moveY > this.state.height) {
+      return
+    }
     this.setState({leftCrop: gestureState.moveX, topCrop: gestureState.moveY - 20, scrollEnabled: true})
   }
   moved2(gestureState) {
+    if (gestureState.moveX - this.state.leftCrop < 50 || gestureState.moveY - this.state.topCrop < 50) {
+      return
+    }
     this.setState({rightCrop: this.state.width - gestureState.moveX, bottomCrop: this.state.height - gestureState.moveY + 20, scrollEnabled: false})
   }
 
   done2(gestureState) {
+    if (gestureState.moveX - this.state.leftCrop < 50 || gestureState.moveY - this.state.topCrop < 50) {
+      return
+    }
     this.setState({rightCrop: this.state.width - gestureState.moveX, bottomCrop: this.state.height - gestureState.moveY + 20, scrollEnabled: true})
   }
 
   render() {
     let mainView = null
-    
     if (this.state.picture && this.state.picture.uri) {
-      mainView = <View style={styles.main} onLayout={(event) => {
-        const {x, y, width, height} = event.nativeEvent.layout;
-        this.setState({x, y, width, height});
-      }}>
-      <View style={{zIndex: 5, backgroundColor:'rgba(128,128,128,0.5)', position: 'absolute', top: 0, left: 0, right:0, bottom: this.state.height - this.state.topCrop}}></View>
-      <View style={{zIndex: 5, backgroundColor:'rgba(128,128,128,0.5)', position: 'absolute', top: this.state.topCrop, left: 0, right:this.state.width - this.state.leftCrop, bottom: 0}}>
-      </View>
-        <DragButton style={{borderRadius: 20, borderWidth: 2, backgroundColor: 'rgba(255,255,255,0.1)', borderColor: '#d6d7da', height: 60, width: 60, position: 'absolute', top: this.state.topCrop - 30, left: this.state.leftCrop - 30, zIndex: 6}} moved={this.moved} done={this.done} />
-
-
-      <View style={{zIndex: 5, backgroundColor:'rgba(128,128,128,0.5)', position: 'absolute', top: this.state.height - this.state.bottomCrop, left: 0, right:0, bottom: 0}}></View>
-      <View style={{zIndex: 5, backgroundColor:'rgba(128,128,128,0.5)', position: 'absolute', top: 0, left: this.state.width - this.state.rightCrop, right:0, bottom: this.state.bottomCrop}}>
-      </View>
-        <DragButton style={{borderRadius: 20, borderWidth: 2, backgroundColor: 'rgba(255,255,255,0.1)', borderColor: '#d6d7da', height: 60, width: 60, position: 'absolute', top: this.state.height - this.state.bottomCrop - 30, left: this.state.width - this.state.rightCrop - 30, zIndex: 6}} moved={this.moved2} done={this.done2} />
-        <ScrollView
-          minimumZoomScale={0.1} 
-          maximumZoomScale={5}
-          contentContainerStyle={styles.scroll}
- 
-        >
-          <Image
-            ref={view => { this.imageDisplay = view; }}
-            source={{uri: 'data:image/png;base64,'+this.state.picture.base64}}
-            style={{width: this.state.picture.width, height: this.state.picture.height}}
+      mainView = (
+          <Cropper
+            ref={view => { this.cropper = view; }}
+            style={styles.main}
+            onLayout={this.layoutChanged}
+            picture={this.state.picture}
+            moved={this.moved}
+            done={this.done}
+            moved2={this.moved2}
+            done2={this.done2}
+            position={{
+              x1: this.state.leftCrop,
+              y1: this.state.topCrop,
+              x2: this.state.width - this.state.rightCrop,
+              y2: this.state.height - this.state.bottomCrop,
+            }}
           />
-        </ScrollView>
-      </View>
+
+      );
     }
 
     if (this.state.processing) {
       mainView = <View style={styles.main}><View style={styles.text}><Text style={{fontSize: 20}}>Analyse en cours</Text></View></View>
     }
-    if (this.state.croppedImage || this.state.text) {
+    if (this.state.croppedImage) {
       mainView = <View style={styles.main}>
-      <View style={styles.text}>
-      {this.state.croppedImage ? <Image source={{uri: this.state.croppedImage.uri}} style={{width: this.state.croppedImage.width, height: this.state.croppedImage.height}} /> : null}
-      {this.state.text.length > 0 ? <Text style={{marginTop: 10}}>{this.state.text}</Text> : null}
-      </View>
+        <CroppedImage image={this.state.croppedImage} />
+        { this.state.text ? <View style={styles.text}><Text>{this.state.text}</Text></View> : null }
       </View>
     }
 
     return (
       <View style={styles.container} scrollEnabled={false}>
-      <StatusBarBackground style={{backgroundColor:'rgba(255,255,0, 0.5)'}}/>
-      <View style={styles.block}>
-        <RNCamera
-          ref={ref => {
-            this.camera = ref;
-          }}
-          style={styles.preview}
-          type={RNCamera.Constants.Type.back}
-          flashMode={RNCamera.Constants.FlashMode.on}
-          permissionDialogTitle={'Permission to use camera'}
-          permissionDialogMessage={'We need your permission to use your camera phone'}
-        />
-        { mainView }
+
+        <View style={styles.block}>
+          <RNCamera
+            ref={ref => {
+              this.camera = ref;
+            }}
+            style={styles.preview}
+            type={RNCamera.Constants.Type.back}
+            flashMode={RNCamera.Constants.FlashMode.on}
+            permissionDialogTitle={'Permission to use camera'}
+            permissionDialogMessage={'We need your permission to use your camera phone'}
+          />
+          
+          
+            
+            { mainView }
+            
+            
         </View>
-        <View style={{ flex: 0, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-evenly' }}>
-          <TouchableHighlight onPress={this.takePicture.bind(this)} underlayColor="white">
-            <View style={styles.button}>
-              <Text style={styles.buttonText}>{this.state.buttonText}</Text>
-            </View>
-          </TouchableHighlight>
-        </View>
+        <MainButton action={this.takePicture} text={this.state.buttonText} />
       </View>
     );
   }
 
   componentWillUnmount() {
-    ImageStore.removeImageForTag(this.state.croppedImage)
+    if (this.state.croppedImage) {
+      ImageStore.removeImageForTag(this.state.croppedImage)
+    }
   }
 
   takePicture = async function() {
@@ -149,7 +142,7 @@ export default class App extends Component<Props> {
       return
     }
     if (this.state.picture) {
-      this.imageDisplay.measure( async (fx, fy, width, height, px, py) => {
+      this.cropper.imageDisplay.measure( async (fx, fy, width, height, px, py) => {
           const proportion = this.state.picture.width / width
           const topCrop = proportion * (-py + this.state.topCrop + 20)
           const newHeight =  proportion * (this.state.height - this.state.topCrop - this.state.bottomCrop)
@@ -203,6 +196,7 @@ export default class App extends Component<Props> {
     }
     if (this.camera && this.state.picture === null) {
       const options = { width: 600, quality: 0.8, base64: true, doNotSave: false, pauseAfterCapture: true };
+      this.setState({picture: null, topCrop: 40, leftCrop: 40, bottomCrop: 40, rightCrop: 40 })
       try {
         this.setState({takingPicture: true})
         const data = await this.camera.takePictureAsync(options);
@@ -216,6 +210,7 @@ export default class App extends Component<Props> {
   };
 
   detectText = async (uri) => {
+    
     try {
       const visionResp = await RNTextDetector.detectFromUri(uri);
       if (visionResp.error) {
@@ -241,6 +236,7 @@ export default class App extends Component<Props> {
       this.setState({text: 'Aucun texte', picture: null})
       Tts.speak('Désolé, je n\'ai détecté aucun texte.', { iosVoiceId: 'com.apple.ttsbundle.Thomas-compact' });
     }
+    
   }
 }
 
@@ -252,11 +248,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     width: '100%',
   },
-  scroll: {
-    flex:1,
-    width: '100%',
-    backgroundColor: '#ccc',
-  },
+
   welcome: {
     fontSize: 20,
     textAlign: 'center',
@@ -308,18 +300,4 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     margin: 20,
   },
-  button: {
-    borderRadius: 3,
-    marginBottom: 10,
-    marginTop: 10,
-    alignItems: 'center',
-    backgroundColor: '#2196F3'
-  },
-  buttonText: {
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingLeft: 80,
-    paddingRight: 80,
-    color: 'white'
-  }
 });
